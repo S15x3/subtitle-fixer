@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>معدّل الترجمة</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231f6f6b'/><text x='50' y='64' text-anchor='middle' font-family='Arial,Helvetica,sans-serif' font-weight='bold' font-size='40' textLength='80' lengthAdjust='spacingAndGlyphs' fill='white'>SUB</text></svg>">
+<style>
+:root{--bg:#f3f1ec;--panel:#fff;--ink:#1d2430;--mute:#697386;--line:#d9d5cb;--acc:#1f6f6b;--acc-ink:#fff;--del:#fbe4e1;--add:#dff3e6}
+@media (prefers-color-scheme:dark){:root{--bg:#14181f;--panel:#1c222c;--ink:#e6e9ee;--mute:#9099a8;--line:#303847;--acc:#4fb8b0;--acc-ink:#0c1a19;--del:#42232300;--add:#1d3a2a}
+:root{--del:#43252a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 "Segoe UI",Tahoma,system-ui,sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:1.5rem;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 20px}
+.line{display:flex;flex-wrap:wrap;gap:6px 22px;align-items:center;padding:4px 0}
+.grid{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.sec{padding:10px 0;border-bottom:1px solid var(--line)}
+.sec:last-child{border:0}
+.sec h2{font-size:1rem;margin:0 0 6px}
+label.opt{display:flex;gap:8px;align-items:flex-start;padding:3px 0;cursor:pointer}
+label.opt input{margin-top:7px;accent-color:var(--acc)}
+label.opt small{display:block;color:var(--mute);line-height:1.5}
+.ex{direction:rtl;color:var(--mute);font-size:.85rem}
+.sub-opts{margin-inline-start:22px;border-inline-start:2px solid var(--line);padding-inline-start:10px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:30px 16px;text-align:center;cursor:pointer;background:var(--panel)}
+.drop.over{border-color:var(--acc)}
+.drop b{display:block;font-size:1.1rem}
+.drop span{color:var(--mute)}
+.file{margin-top:14px}
+.fh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.fn{font-weight:600;word-break:break-all}
+.stat{color:var(--mute);font-size:.9rem}
+button{font:inherit;border:0;border-radius:8px;padding:6px 16px;background:var(--acc);color:var(--acc-ink);cursor:pointer}
+button.ghost{background:transparent;color:var(--mute);border:1px solid var(--line)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.rows{margin-top:10px;max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.row{padding:6px 10px;border-bottom:1px solid var(--line);font-size:.92rem;word-break:break-word}
+.row:last-child{border:0}
+.row div{unicode-bidi:plaintext;text-align:start;padding:1px 6px;border-radius:4px}
+.row .b{background:var(--del)}
+.row .a{background:var(--add);margin-top:2px}
+.note{color:var(--mute);font-size:.85rem;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="panel" id="opts">
+  <div class="line">
+    <span>حذف الأقواس:</span>
+    <label class="opt"><input type="checkbox" id="rmSq"><span>حذف [ ]</span></label>
+    <label class="opt"><input type="checkbox" id="rmPar"><span>حذف ( )</span></label>
+    <label class="opt"><input type="checkbox" id="rmQ"><span>حذف " "</span></label>
+  </div>
+  <div class="line"><label class="opt"><input type="checkbox" id="tanween"><span>تعديل مكان التنوين</span></label></div>
+  <div class="line"><label class="opt"><input type="checkbox" id="diac"><span>حذف السكون والشدة</span></label></div>
+  <div class="line"><label class="opt"><input type="checkbox" id="marks"><span>تصحيح مكان علامات الترقيم</span></label></div>
+  <div class="line"><label class="opt"><input type="checkbox" id="dots"><span>تصحيح مكان النقاط الثلاثة</span></label></div>
+</div>
+
+<div style="margin-top:14px">
+  <div class="drop" id="drop" tabindex="0">
+    <b>اسحب الملفات هنا أو اضغط للاختيار</b>
+    <span>.ass .ssa .srt — تقدر ترفع أكثر من ملف</span>
+    <input type="file" id="pick" accept=".ass,.ssa,.srt" multiple hidden>
+  </div>
+  <div id="files"></div>
+</div>
+</div>
+
+<script>
+const BR='\uE001', PH='\uE000';
+const LET=/[\p{L}\p{N}]/u;
+const IDS=['rmSq','rmPar','rmQ','tanween','diac','marks','dots'];
+const $=id=>document.getElementById(id);
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const count=(s,c)=>s.split(c).length-1;
+let files=[];
+
+function getOpts(){const o={};IDS.forEach(i=>o[i]=$(i).checked);return o}
+
+/* ---- حماية أكواد الأسطر: {…} و \N و \n و \h وتاقات HTML في srt ---- */
+function tokenize(t,fmt){
+  const toks=[];
+  const re=fmt==='srt'?/\{[^}]*\}|<[^>]+>|\n/g:/\{[^}]*\}|\\[Nn]|\\h/g;
+  const s=t.replace(re,m=>{toks.push(m);return (m==='\n'||/^\\[Nn]$/.test(m))?BR:PH});
+  return {s,toks};
+}
+function restore(s,toks){let i=0;return s.replace(/[\uE000\uE001]/g,()=>toks[i++])}
+
+/* ---- نقل علامات أول الجملة (. ، ! و ...) إلى نهايتها، بدون لمس الأقواس ---- */
+function fixChunk(s,o){
+  const m=s.match(/^(\uE000*)([\s\S]*?)(\uE000*)$/);
+  const lead=m[1],trail=m[3],core=m[2];
+  const mm=core.match(/^((?:\.{2,}|…|[.!،]|\s)+)([\s\S]+)$/);
+  if(!mm) return s;
+  const units=mm[1].match(/\.{2,}|…|[.!،]/g);
+  if(!units) return s;
+  const rest=mm[2].replace(/^\s+/,'');
+  if(!LET.test(rest)||/[.!،؟?…]["”»)\]]*\s*$/.test(rest)) return s;
+  const isDots=u=>/^(\.{2,}|…)$/.test(u);
+  const stay=[],move=[];
+  units.forEach(u=>((isDots(u)?o.dots:o.marks)?move:stay).push(u));
+  if(!move.length) return s;
+  return lead+stay.join('')+rest.replace(/\s+$/,'')+move.reverse().join('')+trail;
+}
+
+function processText(text,o,fmt){
+  const {s:orig,toks}=tokenize(text,fmt);
+  let s=orig;
+  if(o.diac) s=s.replace(/[\u0651\u0652]/g,'');
+  if(o.tanween) s=s.replace(/(\u0651?)\u064B(\u0651?)\u0627(?![\u0621-\u064A\u064B-\u0652\u0670])/g,'$1$2\u0627\u064B');
+  if(o.marks||o.dots) s=fixChunk(s,o);
+  let rm='';
+  if(o.rmSq) rm+='\\[\\]';
+  if(o.rmPar) rm+='()';
+  if(o.rmQ) rm+='"“”';
+  if(rm){
+    const before=s;
+    s=s.replace(new RegExp('['+rm+']','g'),'');
+    if(s!==before){
+      s=s.replace(/ {2,}/g,' ')
+         .replace(/^(\uE000*) +/,'$1').replace(/ +(\uE000*)$/,'$1')
+         .replace(/ +(\uE001)/g,'$1').replace(/(\uE001) +/g,'$1');
+    }
+  }
+  return s===orig?text:restore(s,toks);
+}
+
+/* ---- معالجة الملفات ---- */
+function processFile(f,o){
+  const eol=f.text.includes('\r\n')?'\r\n':'\n';
+  const lines=f.text.split(/\r?\n/);
+  const changes=[];
+  const log=(a,b)=>{if(a!==b)changes.push([a,b])};
+
+  if(f.ext==='srt'){
+    for(let i=0;i<lines.length;i++){
+      if(lines[i].includes('-->')){
+        let j=i+1;
+        while(j<lines.length&&lines[j].trim()!=='')j++;
+        if(j>i+1){
+          const old=lines.slice(i+1,j).join('\n');
+          const neu=processText(old,o,'srt');
+          log(old,neu);
+          if(neu!==old) lines.splice(i+1,j-i-1,...neu.split('\n'));
+          j=i+1;while(j<lines.length&&lines[j].trim()!=='')j++;
+        }
+        i=j;
+      }
+    }
+  }else{
+    let inEv=false,idx=9;
+    for(let i=0;i<lines.length;i++){
+      const L=lines[i];
+      if(/^\s*\[.*\]\s*$/.test(L)){inEv=/^\s*\[events\]/i.test(L);continue}
+      if(!inEv)continue;
+      if(/^Format:/i.test(L)){
+        const k=L.slice(7).split(',').map(x=>x.trim().toLowerCase()).indexOf('text');
+        if(k>=0)idx=k;continue;
+      }
+      if(!/^Dialogue:/.test(L))continue;
+      let pos=0;
+      for(let k=0;k<idx;k++){const c=L.indexOf(',',pos);if(c<0){pos=-1;break}pos=c+1}
+      if(pos<0)continue;
+      const text=L.slice(pos);
+      if(/\\p[1-9]/.test(text))continue; // رسم فكتور
+      const neu=processText(text,o,'ass');
+      if(neu!==text){log(text,neu);lines[i]=L.slice(0,pos)+neu}
+    }
+  }
+  return {out:lines.join(eol),changes};
+}
+
+/* ---- الواجهة ---- */
+function render(){
+  const o=getOpts();
+  try{localStorage.setItem('subfix-opts',JSON.stringify(o))}catch(e){}
+  const box=$('files');box.innerHTML='';
+  files.forEach((f,n)=>{
+    const r=processFile(f,o);f.res=r;
+    const div=document.createElement('div');div.className='panel file';
+    const lim=f.showAll?r.changes.length:60;
+    const rows=r.changes.slice(0,lim).map(([a,b])=>`<div class="row"><div class="b">${esc(a)}</div><div class="a">${esc(b)}</div></div>`).join('');
+    const more=r.changes.length>60?`<button class="ghost" data-m="${n}" style="margin-top:8px">${f.showAll?'عرض أول 60 فقط':'عرض الكل ('+r.changes.length+')'}</button>`:'';
+    div.innerHTML=`<div class="fh"><div><div class="fn">${esc(f.name)}</div><div class="stat">${r.changes.length} سطر تغيّر${r.changes.length>60&&!f.showAll?' (المعاينة تعرض أول 60)':''}</div></div>
+      <div style="display:flex;gap:8px"><button data-d="${n}">تحميل الملف المعدّل</button><button class="ghost" data-x="${n}">إزالة</button></div></div>
+      ${rows?`<div class="rows">${rows}</div>${more}`:'<div class="note">لا توجد تغييرات بالخيارات الحالية.</div>'}`;
+    box.appendChild(div);
+  });
+}
+
+function addFiles(list){
+  [...list].forEach(file=>{
+    const ext=(file.name.split('.').pop()||'').toLowerCase();
+    if(!['ass','ssa','srt'].includes(ext))return;
+    file.arrayBuffer().then(buf=>{
+      const u=new Uint8Array(buf);let enc='utf-8',bom=false;
+      if(u[0]===0xFF&&u[1]===0xFE){enc='utf-16le';bom=true}
+      else if(u[0]===0xFE&&u[1]===0xFF){enc='utf-16be';bom=true}
+      else if(u[0]===0xEF&&u[1]===0xBB&&u[2]===0xBF){bom=true}
+      files.push({name:file.name,ext:ext==='ssa'?'ass':ext,rawExt:ext,text:new TextDecoder(enc).decode(buf),bom});
+      render();
+    });
+  });
+}
+
+function download(f){
+  const base=f.name.replace(/\.[^.]+$/,'');
+  const blob=new Blob([f.bom?'\ufeff':'',f.res.out],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=base+'_edit.'+f.rawExt;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+IDS.forEach(i=>$(i).addEventListener('change',render));
+try{const s=JSON.parse(localStorage.getItem('subfix-opts')||'{}');IDS.forEach(i=>{if(s[i])$(i).checked=true})}catch(e){}
+$('files').addEventListener('click',e=>{
+  const d=e.target.dataset;
+  if(d.d!==undefined)download(files[d.d]);
+  if(d.x!==undefined){files.splice(d.x,1);render()}
+  if(d.m!==undefined){files[d.m].showAll=!files[d.m].showAll;render()}
+});
+const drop=$('drop'),pick=$('pick');
+drop.addEventListener('click',()=>pick.click());
+drop.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick.click()}});
+pick.addEventListener('change',()=>{addFiles(pick.files);pick.value=''});
+['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+</script>
+</body>
+</html>
